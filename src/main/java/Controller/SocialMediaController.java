@@ -4,7 +4,9 @@ import Model.Account;
 import Model.Message;
 import Service.SocialMediaService;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -20,11 +22,11 @@ import io.javalin.http.Context;
  */
 public class SocialMediaController {
 
-    private SocialMediaService socialMediaService;
+    //Class field for service object for handler functions to reference to
+    private SocialMediaService socialMediaService = new SocialMediaService();
 
     /**
-     * In order for the test cases to work, you will need to write the endpoints in the startAPI() method, as the test
-     * suite must receive a Javalin object from this method.
+     * Creates an instance of a Javalin Jettyserver. 
      * @return a Javalin app object which defines the behavior of the Javalin controller.
      */
     public Javalin startAPI() {
@@ -35,7 +37,7 @@ public class SocialMediaController {
         app.get("/messages", this::getAllMessagesHandler);
         app.get("/messages/{message_id}", this::getMessageHandler);
         app.delete("/messages/{message_id}", this::deleteMessageHandler);
-        app.patch("/mesages/{message_id}", this::patchMessageHandler);
+        app.patch("/messages/{message_id}", this::patchMessageHandler);
         app.get("/accounts/{account_id}/messages", this::getMessagesByIdHandler);
         return app;
     }
@@ -47,16 +49,22 @@ public class SocialMediaController {
      * @throws JsonMappingException
      */
     private void registerHandler(Context context) throws JsonMappingException, JsonProcessingException {
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
-        Account account;
-        account = mapper.readValue(context.body(), Account.class);
+
+        //Converts body json to account object
+        Account account = mapper.readValue(context.body(), Account.class);
+
+        //Sends body json to service to register the account
         Account addedAccount = socialMediaService.register(account);
+
+        //Checks if null for when an error occurred
         if (addedAccount == null) {
-            context.status(400);
+            context.status(400); //General Client Error
         } else {
             context.json(mapper.writeValueAsString(addedAccount));
         }
-        
     }
     /**
      * 
@@ -65,77 +73,161 @@ public class SocialMediaController {
      * @throws JsonProcessingException
      */
     private void loginHandler(Context context) throws JsonMappingException, JsonProcessingException {
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
-        Account account;
-        account = mapper.readValue(context.body(), Account.class);
+
+        //Converts body json to account object
+        Account account = mapper.readValue(context.body(), Account.class);
+        //Sends body json to service to validate the login
         Account addedAccount = socialMediaService.login(account);
+
+        //Checks if null for when an error occurred
         if (addedAccount == null) {
-            context.status(400);
+            context.status(401); //Unauthorized: Request not valid
         } else {
             context.json(mapper.writeValueAsString(addedAccount));
         }
     }
+    /**
+     * 
+     * @param context
+     * @throws JsonProcessingException
+     */
     private void getMessageHandler(Context context) throws JsonProcessingException{
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
+
+        //Gets id value from endpoint url
         int message_id = Integer.parseInt(context.pathParam("message_id"));
+
+        //Gets message object from service read message method
         Message message = socialMediaService.readMessage(message_id);
+
+        //If message null still return 200 but without an object in response body.
         if (message == null) {
-            context.status(400);
+            context.status(200); //Default successful response
         } else {
             context.json(mapper.writeValueAsString(message));
         }
     }
+    /**
+     * 
+     * @param context
+     * @throws JsonProcessingException
+     */
     private void getAllMessagesHandler(Context context) throws JsonProcessingException{
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
+
+        //Returns List of Messages or null on error from service
         List<Message> messages = socialMediaService.readAllMessages();
-        if (messages.isEmpty()) {
-            context.status(400);
+
+        //If null return 200 without a response body
+        if (messages == null) {
+            context.status(200); //Default successful response
         } else {
+            //return all messages
             context.json(mapper.writeValueAsString(messages));
         }
     }
+    /**
+     * 
+     * @param context
+     * @throws JsonProcessingException
+     */
     private void getMessagesByIdHandler(Context context) throws JsonProcessingException{
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
-        List<Message> messages = socialMediaService.readAllMessages();
+
+        //Gets account id from url path
         int account_id = Integer.parseInt(context.pathParam("account_id"));
-        context.json(socialMediaService.readAllMessagesById(account_id));
-        if (messages.isEmpty()) {
-            context.status(400);
+
+        //Creates a list of messages from service's read all messages or null on errors
+        List<Message> messages = socialMediaService.readAllMessagesById(account_id);
+        
+        //If null then an error occurred otherwise return object
+        if (messages == null) {
+            context.status(200); //Deafult successful response
         } else {
             context.json(mapper.writeValueAsString(messages));
         }
     }
+    /**
+     * 
+     * @param context
+     * @throws JsonMappingException
+     * @throws JsonProcessingException
+     */
     private void postMessageHandler(Context context) throws JsonMappingException, JsonProcessingException{
+        
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
+
+        //Converts body json to message object
         Message message = mapper.readValue(context.body(), Message.class);
+
+        //Set message to response from service which is the new value or null on error
         message = socialMediaService.createMessage(message);
+
+        //If null then error occurred, otherwise return object
         if (message == null) {
-            context.status(400);
+            context.status(400); //General Client Error
         } else {
-            context.json(mapper.writeValueAsString(message));
+            context.status(200).json(mapper.writeValueAsString(message));
         }
     }
+    /**
+     * 
+     * @param context
+     * @throws JsonProcessingException
+     */
     private void patchMessageHandler(Context context) throws JsonProcessingException{
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
+
+        //Gets id value from endpoint url
         int message_id = Integer.parseInt(context.pathParam("message_id"));
-        Message message = socialMediaService.readMessage(message_id);
-        //Return body of Json object as a string
-        String message_text = context.body();
-        System.out.print(message_text);
-        message.setMessage_text(message_text);
-        message = socialMediaService.updateMessage(message_id, message_text);
+
+        //Converts body json to message object and sets the object to have the id from path
+        Message message = mapper.readValue(context.body(), Message.class);
+        message.setMessage_id(message_id);
+
+        //Returns message or null to new message object
+        message = socialMediaService.updateMessage(message);
+
+        //Using a new object
         if (message == null) {
-            context.status(400);
+            context.status(400); //General Client Error
         } else {
             context.json(mapper.writeValueAsString(message));
         }
     }
+
+    /**
+     * 
+     * @param context
+     * @throws JsonProcessingException
+     */
     private void deleteMessageHandler(Context context) throws JsonProcessingException{
+
+        //Uses Jackson object mapper to serialize objects
         ObjectMapper mapper = new ObjectMapper();
+
+
+        //Get message id from url path
         int message_id = Integer.parseInt(context.pathParam("message_id"));
+
+        //sets message object to deleted message or null on failure
         Message message = socialMediaService.readMessage(message_id);
+
+        //If null return empty body with default response
         if (message == null) {
-            context.status(400);
+            context.status(200); //Deafult successful response
         } else {
             context.json(mapper.writeValueAsString(message));
         }
